@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Access Data Explorer</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#172033;background:#f4f7fb}
+*{box-sizing:border-box}body{margin:0}.wrap{max-width:1200px;margin:auto;padding:28px 18px 50px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+h1{margin:0;font-size:clamp(1.5rem,3vw,2.2rem)}.sub{color:#5c667b;margin:.45rem 0 0}
+.pill{background:#e5efff;color:#174ea6;padding:7px 11px;border-radius:99px;font-size:.85rem;font-weight:700}
+.panel{background:white;border:1px solid #e1e7f0;border-radius:16px;padding:18px;margin:14px 0;box-shadow:0 3px 12px #17203308}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;align-items:end}
+label{display:block;font-size:.85rem;font-weight:700;margin-bottom:7px;color:#39445a}
+input,select,button{font:inherit;border-radius:10px;padding:11px 12px;border:1px solid #ccd5e2;width:100%;background:white;color:#172033}
+button{cursor:pointer;font-weight:700;background:#175cd3;color:white;border-color:#175cd3}
+button.secondary{background:white;color:#1b4f9c;border-color:#b8c9e6}
+button:disabled{opacity:.5;cursor:not-allowed}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.actions button{width:auto}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.stat{background:#f3f6fb;padding:10px 13px;border-radius:10px;color:#47536a}
+.tablewrap{overflow:auto;max-height:60vh;border:1px solid #e1e7f0;border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;background:white}
+th,td{text-align:left;padding:11px 12px;border-bottom:1px solid #edf0f5;white-space:nowrap}
+th{position:sticky;top:0;background:#f7f9fc;z-index:1}
+.status{font-size:.88rem;color:#47536a;margin-top:10px;min-height:1.3em}
+.empty{text-align:center;color:#69758b;padding:35px}
+footer{color:#69758b;font-size:.85rem;margin-top:18px;line-height:1.5}
+textarea{width:100%;min-height:90px;padding:10px;border-radius:10px;border:1px solid #ccd5e2;font:inherit}
+@media(max-width:600px){.wrap{padding:18px 12px}.panel{padding:13px}.actions button{width:100%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div><h1>Access Data Explorer</h1><p class="sub">Search, filter, and export access-control device CSVs.</p></div>
+  <span class="pill">Open-source starter</span>
+</header>
+<section class="panel">
+  <div class="controls">
+    <div><label for="file">Upload CSV</label><input id="file" type="file" accept=".csv,text/csv"></div>
+    <div><label for="search">Search all columns</label><input id="search" type="search" placeholder="Controller, door, device..."></div>
+    <div><label for="category">Device category</label><select id="category"><option value="">All device types</option><option>IN</option><option>OUT</option><option>EML</option><option>MC</option><option>ERS</option><option>EGRESS SWITCH</option></select></div>
+  </div>
+  <div class="actions">
+    <button id="sample" class="secondary">Load sample data</button>
+    <button id="export" disabled>Export filtered CSV</button>
+    <button id="clear" class="secondary">Clear filters</button>
+  </div>
+  <div id="status" class="status" role="status">Load the fictional sample file or upload your own CSV.</div>
+</section>
+<section class="panel">
+  <div class="stats"><span class="stat">Rows loaded: <strong id="total">0</strong></span><span class="stat">Rows shown: <strong id="shown">0</strong></span><span class="stat">Columns: <strong id="cols">0</strong></span></div>
+  <div id="tablearea" class="empty">No data loaded yet.</div>
+</section>
+<section class="panel">
+  <h2 style="margin-top:0;font-size:1.15rem">Optional: Ask Claude to summarize</h2>
+  <p class="sub">Requires the optional local server and a valid Anthropic API key. Never paste API keys here.</p>
+  <div class="actions"><button id="ask" class="secondary" disabled>Ask Claude to summarize filtered data</button></div>
+  <p id="claudeStatus" class="status" role="status"></p>
+  <textarea id="summary" readonly placeholder="Claude's summary will appear here."></textarea>
+</section>
+<footer>Privacy: CSV filtering runs locally in your browser. Use fictional/demo data for public demos. Do not upload confidential building, employee, credential, or security-sensitive data to an AI service.</footer>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+let headers=[], rows=[], filtered=[];
+function parseCSV(text){
+  const out=[];let row=[],cell='',quoted=false;
+  text=text.replace(/^\uFEFF/,'');
+  for(let i=0;i<text.length;i++){
+    const c=text[i],n=text[i+1];
+    if(c==='"'&&quoted&&n==='"'){cell+='"';i++}
+    else if(c==='"'){quoted=!quoted}
+    else if(c===','&&!quoted){row.push(cell);cell=''}
+    else if((c==='\n'||c==='\r')&&!quoted){
+      if(c==='\r'&&n==='\n')i++;
+      row.push(cell);if(row.some(v=>v.trim()!==''))out.push(row);
+      row=[];cell='';
+    } else cell+=c;
+  }
+  row.push(cell);if(row.some(v=>v.trim()!==''))out.push(row);
+  if(!out.length)return {headers:[],rows:[]};
+  const hs=out[0].map((v,i)=>v.trim()||`Column ${i+1}`);
+  return {headers:hs,rows:out.slice(1).map(r=>hs.map((_,i)=>r[i]??''))};
+}
+function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function deviceType(row){
+  const idx=headers.findIndex(h=>/device\s*type|type|function|device category/i.test(h));
+  if(idx>=0)return String(row[idx]||'').trim().toUpperCase();
+  const all=row.join(' ').toUpperCase();
+  return ['EGRESS SWITCH','IN','OUT','EML','MC','ERS'].find(t=>new RegExp('(^|[^A-Z])'+t.replace(' ','\\s+')+'([^A-Z]|$)').test(all))||'';
+}
+function render(){
+  const q=$('search').value.trim().toLowerCase(),cat=$('category').value;
+  filtered=rows.filter(r=>(!q||r.some(v=>String(v).toLowerCase().includes(q)))&&(!cat||deviceType(r)===cat));
+  $('total').textContent=rows.length;$('shown').textContent=filtered.length;$('cols').textContent=headers.length;
+  $('export').disabled=!filtered.length;$('ask').disabled=!filtered.length;
+  if(!headers.length){$('tablearea').className='empty';$('tablearea').textContent='No data loaded yet.';return}
+  if(!filtered.length){$('tablearea').className='empty';$('tablearea').textContent='No rows match your filters.';return}
+  $('tablearea').className='tablewrap';
+  const table=document.createElement('table');
+  const thead=document.createElement('thead'),tr=document.createElement('tr');
+  headers.forEach(h=>{const th=document.createElement('th');th.textContent=h;tr.appendChild(th)});thead.appendChild(tr);table.appendChild(thead);
+  const tbody=document.createElement('tbody');
+  filtered.forEach(r=>{const tr=document.createElement('tr');r.forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.appendChild(td)});tbody.appendChild(tr)});
+  table.appendChild(tbody);$('tablearea').replaceChildren(table);
+}
+function load(text,name){
+  const parsed=parseCSV(text);headers=parsed.headers;rows=parsed.rows;
+  $('status').textContent=`Loaded ${rows.length} rows from ${name}.`;
+  $('summary').value='';$('claudeStatus').textContent='';render();
+}
+$('file').addEventListener('change',async e=>{const f=e.target.files[0];if(f)load(await f.text(),f.name)});
+$('sample').addEventListener('click',async()=>{
+  const sample=`Building,Controller,Door,Device Type,Device Name,Status
+DEMO-A,CTRL-001,Main Entry,IN,Main Entry Reader,Online
+DEMO-A,CTRL-001,Main Entry,OUT,Main Exit Reader,Online
+DEMO-A,CTRL-001,Main Entry,EML,Main Entry Maglock,Online
+DEMO-A,CTRL-001,Main Entry,ERS,Main Entry Request Sensor,Online
+DEMO-A,CTRL-002,Lab Door,IN,Lab Entry Reader,Online
+DEMO-A,CTRL-002,Lab Door,OUT,Lab Exit Reader,Offline
+DEMO-A,CTRL-002,Lab Door,MC,Lab Door Monitor,Online
+DEMO-B,CTRL-003,Store Room,EGRESS SWITCH,Store Room Egress Switch,Online
+DEMO-B,CTRL-003,Store Room,EML,Store Room Maglock,Online
+DEMO-B,CTRL-004,Side Door,IN,Side Door Entry Reader,Online
+DEMO-B,CTRL-004,Side Door,OUT,Side Door Exit Reader,Online`;
+  load(sample,'fictional sample data');
+});
+$('search').addEventListener('input',render);$('category').addEventListener('change',render);
+$('clear').addEventListener('click',()=>{$('search').value='';$('category').value='';render()});
+$('export').addEventListener('click',()=>{
+  const csv=[headers,...filtered].map(r=>r.map(v=>{const s=String(v??'');return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}).join(',')).join('\r\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));a.download='filtered-access-data.csv';a.click();URL.revokeObjectURL(a.href);
+});
+$('ask').addEventListener('click',async()=>{
+  $('claudeStatus').textContent='Contacting local server...';$('summary').value='';
+  try{
+    const response=await fetch('/api/summarize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({headers,rows:filtered.slice(0,100)})});
+    const data=await response.json();if(!response.ok)throw new Error(data.error||'Request failed');
+    $('summary').value=data.summary||'No summary returned.';$('claudeStatus').textContent='Summary received.';
+  }catch(e){$('claudeStatus').textContent='Could not reach Claude server: '+e.message+'. Start the optional server and check your API key.'}
+});
+</script>
+</body>
+</html>
