@@ -1,0 +1,14 @@
+{
+  "name": "access-data-explorer-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Optional local server for Access Data Explorer Claude API demo",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}

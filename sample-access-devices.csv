@@ -1,0 +1,12 @@
+Building,Controller,Door,Device Type,Device Name,Status
+DEMO-A,CTRL-001,Main Entry,IN,Main Entry Reader,Online
+DEMO-A,CTRL-001,Main Entry,OUT,Main Exit Reader,Online
+DEMO-A,CTRL-001,Main Entry,EML,Main Entry Maglock,Online
+DEMO-A,CTRL-001,Main Entry,ERS,Main Entry Request Sensor,Online
+DEMO-A,CTRL-002,Lab Door,IN,Lab Entry Reader,Online
+DEMO-A,CTRL-002,Lab Door,OUT,Lab Exit Reader,Offline
+DEMO-A,CTRL-002,Lab Door,MC,Lab Door Monitor,Online
+DEMO-B,CTRL-003,Store Room,EGRESS SWITCH,Store Room Egress Switch,Online
+DEMO-B,CTRL-003,Store Room,EML,Store Room Maglock,Online
+DEMO-B,CTRL-004,Side Door,IN,Side Door Entry Reader,Online
+DEMO-B,CTRL-004,Side Door,OUT,Side Door Exit Reader,Online
